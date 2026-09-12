@@ -1,0 +1,25 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+
+# Medii virtuale
+.venv/
+venv/
+env/
+
+# Fisiere generate de proiect (mozaic + experimente)
+mozaic.png
+**/rezultate/
+
+# Setari IDE / editor
+.vscode/
+.idea/
+
+# Sistem
+.DS_Store
+Thumbs.db
+desktop.ini
