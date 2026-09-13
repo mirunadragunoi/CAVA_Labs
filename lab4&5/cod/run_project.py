@@ -30,6 +30,9 @@ params.show_path = True
 # aleator, greedy, programareDinamica
 params.method_select_path = 'aleator'
 
+# factorul de amplificare al continutului
+params.factor_amplification = 1.2
+
 resized_image = resize_image(params)
 resized_image_opencv = cv.resize(params.image, (resized_image.shape[1], resized_image.shape[0]))
 
@@ -90,5 +93,14 @@ def rulez_pasi(director_date='../data/', director_iesire='./rezultate/'):
         p.resize_option = 'micsoreazaInaltime'
         p.num_pixel_height = n
         salvez('praga_inaltime_%d.png' % n, resize_image(p))
+
+    # PASUL 3!!!! --->> amplificarea continutului cu mai multi factori
+    for f in [1.05, 1.1, 1.2, 1.3]:
+        p = Parameters(os.path.join(director_date, 'arcTriumf.jpg'))
+        p.show_path = False
+        p.method_select_path = 'programareDinamica'
+        p.resize_option = 'amplificaContinut'
+        p.factor_amplification = f
+        salvez('arcTriumf_amplificat_%.2f.png' % f, resize_image(p))
 
 rulez_pasi()

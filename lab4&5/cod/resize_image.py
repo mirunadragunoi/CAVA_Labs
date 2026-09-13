@@ -135,10 +135,35 @@ def decrease_height(params: Parameters, num_pixels):
     cv.destroyAllWindows()
     return img
 
+def amplify_conetnt(params: Parameters, factor):
+    # amplific continutul pastrand dimnesiunea initiala
+    # am 2 pasi
+    # 1. maresc imaginea cu un factor, prin redimensionarea obisnuita
+    # 2. tai drumurile pana revin exact la dimnesiunea originala
+    # obiectele importante din imagine raman marite pentru ca drumurile sterse trec prin zonele de energie mica, nu prin ele
+    if factor is None:
+        factor = params.factor_amplification
 
-def delete_object(params: Parameters, x0, y0, w, h):
-    #TODO: scrieti codul
-    return None
+    h, w, c = params.image.shape
+
+    # pas 1: scalarea uzuala cu factorul cerut
+    imagine_marita = cv.resize(params.image, None, fx=factor, fy=factor)
+    h_nou, w_nou = imagine_marita.shape[:2]
+
+    # pas 2: tai surplusul, mai intai pe latime si dupa pe inaltime
+    params_local = copy.copy(params)
+    params_local.image = imagine_marita
+
+    img = imagine_marita
+    img, _ = _decrease_width_img(img, w_nou - w, params_local)
+
+    img_transpus = np.transpose(img, (1, 0, 2)).copy()
+    img_transpus, _ = _decrease_width_img(img_transpus, h_nou - h, params_local)
+    img = np.transpose(img_transpus, (1, 0, 2)).copy()
+
+    cv.destroyAllWindows()
+
+    return img
 
 def resize_image(params: Parameters):
 
@@ -152,8 +177,8 @@ def resize_image(params: Parameters):
         return resized_image
     
     elif params.resize_option == 'amplificaContinut':
-        #TODO: scrieti codul
-        return None
+        resized_image = amplify_conetnt(params, params.factor_amplification)
+        return resized_image
 
     elif params.resize_option == 'eliminaObiect':
         #TODO: scrieti codul
