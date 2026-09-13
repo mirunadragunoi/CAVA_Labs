@@ -165,6 +165,45 @@ def amplify_conetnt(params: Parameters, factor):
 
     return img
 
+def delete_object(params:Parameters, x0, y0, w, h):
+    """sterge obiectul delimitat de dreptunghiul (x0, y0, w, h).
+ 
+    marcam obiectul intr-o masca si ii dam energie foarte mica
+    drumul de cost minim va prefera sa treaca prin obiect, deci fiecare taietura mananca din el
+    repet pana nu mai ramane niciun pixel marcat
+ 
+    directia o alegem dupa latura mai mica a dreptunghiului: daca obiectul este mai ingust decat inalt, taiem drumuri verticale (mai putine taieturi, deci mai putina distorsiune)
+    """
+    img = params.image.copy()
+
+    masca = np.zeros(img.shape[:2], dtype=np.uint8)
+    masca[y0:y0 + h, x0:x0 + w] = 1
+
+    params_local = copy.copy(params)
+
+    # drumurile aleatoare nu tin cont de energie, deci nu ar nimeri obiectivul
+    if params_local.method_select_path == 'aleator':
+        params_local.method_select_path = 'programareDinamica'
+
+    if w <= h:
+        # obiectul este ingust, deci tai drumurile verticale = w bucati
+        img, masca = _decrease_width_img(img, w, params_local, masca)
+    else:
+        # obiectul este lat, deci tai drumurile orizontale, adica cele verticale pe transpusa
+        img_transpus = np.transpose(img, (1, 0, 2)).copy()
+        masca_transpusa = masca.T.copy()
+
+        img_transpus, masca_transpusa = _decrease_width_img(img_transpus, h, params_local, masca_transpusa)
+
+        img = np.transpose(img_transpus, (1, 0, 2)).copy()
+        masca = masca_transpusa.T.copy()
+
+    if masca is not None and np.sum(masca) > 0:
+        print('Atentie: au ramas %d pixeli din obiect.' % int(np.sum(masca)))
+
+    cv.destroyAllWindows()
+    return img
+
 def resize_image(params: Parameters):
 
     if params.resize_option == 'micsoreazaLatime':
@@ -181,8 +220,14 @@ def resize_image(params: Parameters):
         return resized_image
 
     elif params.resize_option == 'eliminaObiect':
-        #TODO: scrieti codul
-        return None
+        # selectROI deschide o fereasca, pot sa trag direct un dreptunghi peste obiect si apas ENTER pt confirmare
+        x0, y0, w, h = cv.selectROI('selecteaza obiectul', np.uint8(params.image))
+        cv.destroyAllWindows()
+        if w == 0 or h == 0:
+            print('nu a fost selectat niciun obiect')
+            sys.exit(-1)
+        resized_image = delete_object(params, int(x0), int(y0), int(w), int(h))
+        return resized_image
 
 
     else:

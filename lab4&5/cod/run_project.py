@@ -56,6 +56,52 @@ plt.xlabel('My result')
 cv.imwrite('rezultat.png', np.uint8(np.clip(resized_image, 0, 255)))
 plt.show()
 
+def sterg_obiecte(nume_imagine, director_date='../data/', director_iesire='./rezultate/', nr_incercari=5):
+    os.makedirs(director_iesire, exist_ok=True)
+
+    def salvez(nume, img):
+        cv.imwrite(os.path.join(director_iesire, nume), np.uint8(np.clip(img, 0, 255)))
+
+    cale = os.path.join(director_date, nume_imagine)
+    scurt = os.path.splitext(nume_imagine)[0]
+
+    for k in range(nr_incercari):
+        # reincarc imaginea initiala de fiecare data ca sa pornesc mereu de la original
+        p = Parameters(cale)
+        p.show_path = False
+        p.method_select_path = 'programareDinamica'
+
+        # selectROI are nevoie de uint8 iar params.image este float32
+        pentru_selectie = np.uint8(np.clip(p.image, 0, 255))
+
+        titlu = 'incercarea %d din %d - ENTER = confirm, ESC = gata' % (k + 1, nr_incercari)
+
+        x0, y0, w, h = cv.selectROI(titlu, pentru_selectie, showCrosshair=False)
+        cv.destroyAllWindows()
+
+        # daca apas pe ESX sau nu trag dreptunghi selectROI intoarce zerouri
+        if w == 0 or h == 0:
+            print('m-am oprit la incercarea %d.' % (k + 1))
+            break
+
+        x0, y0, w, h = int(x0), int(y0), int(w), int(h)
+
+        print('incercarea %d: sterg dreptunghiul x=%d y=%d w=%d h=%d (%s drumuri).' % (k + 1, x0, y0, w, h, 'verticale' if w <= h else 'orizontale'))
+
+        # salvez originalul cu selectia marcata pentru documentatie
+        marcat = pentru_selectie.copy()
+        cv.rectangle(marcat, (x0, y0), (x0 + w, y0 + h), (0, 0, 255), 2)
+        salvez('%s_obiect_%d_selectie.png' % (scurt, k + 1), marcat)
+
+        # apelez direct delete_object
+        rezultat = delete_object(p, x0, y0, w, h)
+
+        nume_rezultat = '%s_obiect_%d_x%d_y%d_w%d_h%d.png' % (scurt, k + 1, x0, y0, w, h)
+        salvez(nume_rezultat, rezultat)
+        print('   am salvat %s  (%s -> %s)' % (nume_rezultat, str(p.image.shape[:2]), str(rezultat.shape[:2])))
+
+    cv.destroyAllWindows()
+
 def rulez_pasi(director_date='../data/', director_iesire='./rezultate/'):
     os.makedirs(director_iesire, exist_ok=True)
 
@@ -103,4 +149,7 @@ def rulez_pasi(director_date='../data/', director_iesire='./rezultate/'):
         p.factor_amplification = f
         salvez('arcTriumf_amplificat_%.2f.png' % f, resize_image(p))
 
+    # PASUL 4!!! -->> sa sterg un obiect din imagine
+    sterg_obiecte('lac.jpg')
+    
 rulez_pasi()
