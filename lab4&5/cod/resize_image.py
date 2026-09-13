@@ -14,12 +14,20 @@ def compute_energy(img):
     :param img: imaginea initiala
     :return:E - energia
     """
+    # ecuatia din articol: energie(I) = modul(derivataI/dx) + modul(derivataI/dy)
+    # este norma L1 a gradientului, mare pe muchii si texturi --->> continut important 
+    # mica in zone netede cum ar fi cerut peretele apa etc
+
     # urmati urmatorii pasi:
     # 1. transformati imagine in grayscale
+    img_gray = cv.cvtColor(np.float32(img), cv.COLOR_BGR2GRAY)
+
     # 2. folositi filtru sobel pentru a calcula gradientul in directia X si Y
+    grad_x = cv.Sobel(img_gray, cv.CV_64F, 1, 0, ksize=3)
+    grad_y = cv.Sobel(img_gray, cv.CV_64F, 0, 1, ksize=3)
+
     # 3. calculati magnitudinea pentru fiecare pixel al imaginii
-    E = np.zeros((img.shape[0],img.shape[1]))
-    #TODO: scrieti codul
+    E = np.abs(grad_x) + np.abs(grad_y)
 
     return E
 
@@ -29,6 +37,11 @@ def show_path(img, path, color):
         new_image[row, col] = color
 
     E = compute_energy(img)
+
+    # normalizez energia in [0, 255] ca sa fie vizibila; altfel valorile
+    # mari se satureaza si imaginea iese aproape complet alba
+    E_vizibil = cv.normalize(E, None, 0, 255, cv.NORM_MINMAX)
+
     new_image_E = img.copy()
     new_image_E[:,:,0] = E.copy()
     new_image_E[:,:,1] = E.copy()
@@ -48,21 +61,42 @@ def delete_path(img, path):
     :path - drumul vertical
     return: updated_img - imaginea initiala din care s-a eliminat drumul vertical
     """
-    updated_img = np.zeros((img.shape[0], img.shape[1] - 1, img.shape[2]), np.uint8)
+    h, w, c = img.shape
 
+    # varianta vectorizata -->> marchez pixelii de sters intr o masca booleana
+    # ii scot dintr o data si reasamblez imaginea cu o coloana mai putin
+    masca = np.ones((h, w), dtype=bool)
+    linii = np.array([p[0] for p in path])
+    coloane = np.array([p[1] for p in path])
+    masca[linii, coloane] = False 
+
+    updated_img = img[masca].reshape(h, w - 1, c)
+
+    """
+        varianta echivalenta cu for
+    updated_img = np.zeros((h, w-1, c), img.dtype)
+    for i in range(h):
+        col = path[i][1]
+        updated_img[i, :col] = img[i, :col]
+        updated_img[i, col:] = img[i, col + 1:]
+    """
         
     return updated_img
 
 def decrease_width(params: Parameters, num_pixels):
     img = params.image.copy() # copiaza imaginea originala
+
     for i in range(num_pixels):
         print('Eliminam drumul vertical numarul %i dintr-un total de %d.' % (i+1, num_pixels))
 
         # calculeaza energia dupa ecuatia (1) din articol
         E = compute_energy(img)
+
         path = select_path(E, params.method_select_path)
+
         if params.show_path:
             show_path(img, path, params.color_path)
+
         img = delete_path(img, path)
 
     cv.destroyAllWindows()
