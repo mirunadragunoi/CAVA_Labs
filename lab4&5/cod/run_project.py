@@ -2,59 +2,128 @@
     PROIECT
     REDIMENSIONEAZA IMAGINI.
     Implementarea a proiectului Redimensionare imagini
-    dupa articolul "Seam Carving for Content-Aware Iamge Resizing", autori S. Avidan si A. Shamir
+    dupa articolul "Seam Carving for Content-Aware Image Resizing", autori S. Avidan si A. Shamir
 """
 
 from parameters import *
 from resize_image import *
 import matplotlib.pyplot as plt
 import os
+import sys
 
-image_name = '../data/castel.jpg'
-params = Parameters(image_name)
+DIRECTOR_DATE = '../data/'
+DIRECTOR_IESIRE = './rezultate/'
 
-# seteaza optiunea de redimenionare
-# micsoreazaLatime, micsoreazaInaltime, amplificaContinut, eliminaObiect
-params.resize_option = 'micsoreazaLatime'
+# daca e True se afiseaza fiecare drum eliminat la 1 sec
+SHOW_PATH = False
 
-# numarul de pixeli pe latime
-params.num_pixels_width = 50
-
-# numarul de pixeli pe inaltime
-params.num_pixel_height = 50
-
-# afiseaza drumul eliminat
-params.show_path = True
-
-# metoda pentru alegerea drumului
-# aleator, greedy, programareDinamica
-params.method_select_path = 'aleator'
-
-# factorul de amplificare al continutului
-params.factor_amplification = 1.2
-
-resized_image = resize_image(params)
-resized_image_opencv = cv.resize(params.image, (resized_image.shape[1], resized_image.shape[0]))
+# functiile de care mai am nevoie
 
 # imaginile sunt float32 si BGR de aia le convertesc la uint8 si inversez canalele
 def pentru_afisare(img):
     return np.uint8(np.clip(img, 0, 255))[:, :, [2, 1, 0]]
 
-plt.figure(figsize=(15, 5))
-plt.subplot(1, 3, 1)
-plt.imshow(pentru_afisare(params.image))
-plt.xlabel('original')
+def salvez(nume, img):
+    os.makedirs(DIRECTOR_IESIRE, exist_ok=True)
+    cv.imwrite(os.path.join(DIRECTOR_IESIRE, nume), np.uint8(np.clip(img, 0, 255)))
+    print('       ! am salvat %s' % nume)
 
-plt.subplot(1, 3, 2)
-plt.imshow(pentru_afisare(resized_image_opencv))
-plt.xlabel('OpenCV')
+def parametri(nume_imagine, **setari):
+    # construiesc Parameters cu setarile pe care le folosesc peste tot ca sa nu mai repet
+    p = Parameters(os.path.join(DIRECTOR_DATE, nume_imagine))
+    p.show_path = SHOW_PATH
+    p.method_select_path = 'programareDinamica'
 
-plt.subplot(1, 3, 3)
-plt.imshow(pentru_afisare(resized_image))
-plt.xlabel('My result')
+    for cheie, valoare in setari.items():
+        setattr(p, cheie, valoare)
 
-cv.imwrite('rezultat.png', np.uint8(np.clip(resized_image, 0, 255)))
-plt.show()
+    return p
+
+def salvez_varianta_opencv(nume_baza, p, rezultat):
+    # salvez si varianta redimensionata uzual la aceleasi dimensiuni pt comparatie 
+    opencv = cv.resize(p.image, (rezultat.shape[1], rezultat.shape[0]))
+    salvez(nume_baza + '_opencv.png', opencv)
+
+
+# demo ul efectiv 
+def demo_vizual():
+    p = parametri('castel.jpg', resize_option='micsoreazaLatime', num_pixels_width=50, method_select_path='aleator')
+ 
+    rezultat = resize_image(p)
+    rezultat_opencv = cv.resize(p.image, (rezultat.shape[1], rezultat.shape[0]))
+ 
+    plt.figure(figsize=(15, 5))
+    plt.subplot(1, 3, 1)
+    plt.imshow(pentru_afisare(p.image))
+    plt.xlabel('original')
+ 
+    plt.subplot(1, 3, 2)
+    plt.imshow(pentru_afisare(rezultat_opencv))
+    plt.xlabel('OpenCV')
+ 
+    plt.subplot(1, 3, 3)
+    plt.imshow(pentru_afisare(rezultat))
+    plt.xlabel('My result')
+ 
+    salvez('demo_vizual.png', rezultat)
+    plt.show()
+
+def pas_1a(nume_imagine='castel.jpg'):
+    # PASUL 1!!!!!!!
+    # imaginea cu castel 
+    # imaginea initiala, imaginea redimensionata la o imagine cu 50 de pixeli mai putini in latime folosind algoritmul de pastrare al continutului
+    # imaginea initiala redimensionata la o imagine cu 50 de pixeli mai putini in latime cu algoritmul de redimensionare uzuala cu resize din OpenCV
+    # testez pe imaginea cu castelul eliminand 50, 75 si 100 de pixeli in latime
+
+    scurt = os.path.splitext(nume_imagine)[0]
+    print('PASUL 1!!! a) miscorare pe latime pe imaginea %s' % nume_imagine)
+
+    for n in [50, 75, 100]:
+        p = parametri(nume_imagine, resize_option='micsoreazaLatime', num_pixels_width=n)
+        rezultat = resize_image(p)
+        salvez('%s_latime_%d.png' % (scurt, n), rezultat)
+        salvez_varianta_opencv('%s_latime_%d' % (scurt, n), p, rezultat)
+
+def pas_1a_metode(nume_imagine='castel.jpg'):
+    scurt = os.path.splitext(nume_imagine)[0]
+    print('comparatie intre metodele de alegere a drumului pe %s' % nume_imagine)
+ 
+    for metoda in ['aleator', 'greedy', 'programareDinamica']:
+        p = parametri(nume_imagine, resize_option='micsoreazaLatime',
+                      num_pixels_width=50, method_select_path=metoda)
+        salvez('%s_metoda_%s.png' % (scurt, metoda), resize_image(p))
+
+def pasul_1b(nume_imagine='praga.jpg'):
+    scurt = os.path.splitext(nume_imagine)[0]
+    print('PASUL 2!!! b) micsorare pe inaltime pe %s' % nume_imagine)
+ 
+    for n in [50, 75, 100]:
+        p = parametri(nume_imagine, resize_option='micsoreazaInaltime', num_pixel_height=n)
+        rezultat = resize_image(p)
+        salvez('%s_inaltime_%d.png' % (scurt, n), rezultat)
+        salvez_varianta_opencv('%s_inaltime_%d' % (scurt, n), p, rezultat)
+
+def pasul_1c(nume_imagine):
+    scurt = os.path.splitext(nume_imagine)[0]
+    print('PASII 1 SI 2!!! c) latime si inaltime pe %s' % nume_imagine)
+ 
+    p = parametri(nume_imagine, resize_option='micsoreazaLatime', num_pixels_width=75)
+    rezultat = resize_image(p)
+    salvez('%s_c_latime_75.png' % scurt, rezultat)
+    salvez_varianta_opencv('%s_c_latime_75' % scurt, p, rezultat)
+ 
+    p = parametri(nume_imagine, resize_option='micsoreazaInaltime', num_pixel_height=75)
+    rezultat = resize_image(p)
+    salvez('%s_c_inaltime_75.png' % scurt, rezultat)
+    salvez_varianta_opencv('%s_c_inaltime_75' % scurt, p, rezultat)
+
+def pasul_3a(nume_imagine='arcTriumf.jpg'):
+    scurt = os.path.splitext(nume_imagine)[0]
+    print('PASUL 3!!! a) amplificarea continutului pe %s' % nume_imagine)
+ 
+    for f in [1.05, 1.1, 1.2, 1.3]:
+        p = parametri(nume_imagine, resize_option='amplificaContinut', factor_amplification=f)
+        salvez('%s_amplificat_%.2f.png' % (scurt, f), resize_image(p))
 
 def sterg_obiecte(nume_imagine, director_date='../data/', director_iesire='./rezultate/', nr_incercari=5):
     os.makedirs(director_iesire, exist_ok=True)
@@ -102,54 +171,100 @@ def sterg_obiecte(nume_imagine, director_date='../data/', director_iesire='./rez
 
     cv.destroyAllWindows()
 
-def rulez_pasi(director_date='../data/', director_iesire='./rezultate/'):
-    os.makedirs(director_iesire, exist_ok=True)
+def pasul_4b(nume_imagine='lac.jpg'):
+    print('PASUL 4!!! b) stergerea unui obiect din %s' % nume_imagine)
+    sterg_obiecte(nume_imagine, nr_incercari=5)
 
-    def salvez(nume, img):
-        cv.imwrite(os.path.join(director_iesire, nume), np.uint8(np.clip(img, 0, 255)))
+def pasul_34c(nume_imagine):
+    scurt = os.path.splitext(nume_imagine)[0]
+    print('PASII 3-4!! c) amplificare si stergere de obiect pe %s' % nume_imagine)
+ 
+    p = parametri(nume_imagine, resize_option='amplificaContinut', factor_amplification=1.2)
+    salvez('%s_c_amplificat_1.20.png' % scurt, resize_image(p))
+ 
+    sterg_obiecte(nume_imagine, nr_incercari=3)
 
-    # PASUL 1!!!!!!!
-    # imaginea cu castel 
-    # imaginea initiala, imaginea redimensionata la o imagine cu 50 de pixeli mai putini in latime folosind algoritmul de pastrare al continutului
-    # imaginea initiala redimensionata la o imagine cu 50 de pixeli mai putini in latime cu algoritmul de redimensionare uzuala cu resize din OpenCV
-    # testez pe imaginea cu castelul eliminand 50, 75 si 100 de pixeli in latime
+def cer_nume_imagine():
+    nume = input('   numele imaginii din %s (ex: poza.jpg): ' % DIRECTOR_DATE).strip()
+    if not nume:
+        print('   nu ai scris nimic.')
+        return None
+    if not os.path.exists(os.path.join(DIRECTOR_DATE, nume)):
+        print('   nu gasesc %s in %s' % (nume, DIRECTOR_DATE))
+        return None
+    return nume
+ 
+ 
+def pasul_1c_interactiv():
+    nume = cer_nume_imagine()
+    if nume:
+        pasul_1c(nume)
+ 
+ 
+def pasul_34c_interactiv():
+    nume = cer_nume_imagine()
+    if nume:
+        pasul_34c(nume)
+ 
 
-    for n in [50, 75, 100]:
-        p = Parameters(os.path.join(director_date, 'castel.jpg'))
-        p.show_path = False
-        p.method_select_path = 'programareDinamica'
-        p.resize_option = 'micsoreazaLatime'
-        p.num_pixels_width = n 
-        salvez('castel_latime_%d.png' % n, resize_image(p))
-
-    # comparatie intre cele trei metode de alegere a drumului 
-    for metoda in ['aleator', 'greedy', 'programareDinamica']:
-        p = Parameters(os.path.join(director_date, 'castel.jpg'))
-        p.show_path = False
-        p.method_select_path = metoda
-        p.resize_option = 'micsoreazaLatime'
-        p.num_pixels_width = 50
-        salvez('castel_metoda_%s.png' % metoda, resize_image(p))
-
-    # PASUL 2!!!!!!! --->> imaginea cu praga pentru micsorarea inaltimei
-    for n in [50, 75, 100]:
-        p = Parameters(os.path.join(director_date, 'praga.jpg'))
-        p.show_path = False
-        p.method_select_path = 'programareDinamica'
-        p.resize_option = 'micsoreazaInaltime'
-        p.num_pixel_height = n
-        salvez('praga_inaltime_%d.png' % n, resize_image(p))
-
-    # PASUL 3!!!! --->> amplificarea continutului cu mai multi factori
-    for f in [1.05, 1.1, 1.2, 1.3]:
-        p = Parameters(os.path.join(director_date, 'arcTriumf.jpg'))
-        p.show_path = False
-        p.method_select_path = 'programareDinamica'
-        p.resize_option = 'amplificaContinut'
-        p.factor_amplification = f
-        salvez('arcTriumf_amplificat_%.2f.png' % f, resize_image(p))
-
-    # PASUL 4!!! -->> sa sterg un obiect din imagine
-    sterg_obiecte('lac.jpg')
-    
-rulez_pasi()
+def ruleaza_tot():
+    pas_1a()
+    pas_1a_metode()
+    pasul_1b()
+    pasul_3a()
+ 
+ 
+OPTIUNI = {
+    '1': ('Pasul 1 (a)   castel.jpg, 50/75/100 pixeli in latime', pas_1a),
+    '2': ('Pasul 1       comparatie aleator / greedy / programareDinamica', pas_1a_metode),
+    '3': ('Pasul 2 (b)   praga.jpg, 50/75/100 pixeli in inaltime', pasul_1b),
+    '4': ('Pasii 1-2 (c) latime + inaltime pe o imagine aleasa de mine', pasul_1c_interactiv),
+    '5': ('Pasul 3 (a)   arcTriumf.jpg, factori 1.05 / 1.1 / 1.2 / 1.3', pasul_3a),
+    '6': ('Pasul 4 (b)   lac.jpg, sterg un obiect selectat cu mouse-ul', pasul_4b),
+    '7': ('Pasii 3-4 (c) amplificare + stergere pe o imagine aleasa de mine', pasul_34c_interactiv),
+    '8': ('Demo vizual   o singura rulare afisata cu matplotlib', demo_vizual),
+    '9': ('Ruleaza TOT   (fara pasii care cer selectie cu mouse-ul)', ruleaza_tot),
+}
+ 
+ 
+def afisez_meniu():
+    print('\n' + '=' * 64)
+    print('  PROIECT SEAM CARVING - ce vreau sa rulez?')
+    print('=' * 64)
+    for cheie in sorted(OPTIUNI):
+        print('  %s. %s' % (cheie, OPTIUNI[cheie][0]))
+    print('  t. Comut afisarea drumurilor (acum: %s)' % ('PORNITA' if SHOW_PATH else 'oprita'))
+    print('  0. Iesire')
+    print('=' * 64)
+ 
+ 
+def meniu():
+    global SHOW_PATH
+ 
+    # pot da optiunea direct din linia de comanda: python run_project.py 3
+    if len(sys.argv) > 1:
+        alegere = sys.argv[1]
+        if alegere in OPTIUNI:
+            OPTIUNI[alegere][1]()
+        else:
+            print('optiunea %s nu exista' % alegere)
+        return
+ 
+    while True:
+        afisez_meniu()
+        alegere = input('  alegerea mea: ').strip().lower()
+ 
+        if alegere == '0':
+            print('  gata.')
+            break
+        elif alegere == 't':
+            SHOW_PATH = not SHOW_PATH
+        elif alegere in OPTIUNI:
+            OPTIUNI[alegere][1]()
+            print('\n  gata, rezultatele sunt in %s' % DIRECTOR_IESIRE)
+        else:
+            print('  optiune invalida.')
+ 
+ 
+if __name__ == '__main__':
+    meniu()
