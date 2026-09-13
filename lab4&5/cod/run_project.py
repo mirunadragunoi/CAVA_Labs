@@ -73,4 +73,22 @@ def rulez_pasi(director_date='../data/', director_iesire='./rezultate/'):
         p.num_pixels_width = n 
         salvez('castel_latime_%d.png' % n, resize_image(p))
 
+    # comparatie intre cele trei metode de alegere a drumului 
+    for metoda in ['aleator', 'greedy', 'programareDinamica']:
+        p = Parameters(os.path.join(director_date, 'castel.jpg'))
+        p.show_path = False
+        p.method_select_path = metoda
+        p.resize_option = 'micsoreazaLatime'
+        p.num_pixels_width = 50
+        salvez('castel_metoda_%s.png' % metoda, resize_image(p))
+
+    # PASUL 2!!!!!!! --->> imaginea cu praga pentru micsorarea inaltimei
+    for n in [50, 75, 100]:
+        p = Parameters(os.path.join(director_date, 'praga.jpg'))
+        p.show_path = False
+        p.method_select_path = 'programareDinamica'
+        p.resize_option = 'micsoreazaInaltime'
+        p.num_pixel_height = n
+        salvez('praga_inaltime_%d.png' % n, resize_image(p))
+
 rulez_pasi()

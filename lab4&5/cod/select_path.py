@@ -103,6 +103,8 @@ def select_greedy_path(E):
 def select_path(E, method):
     if method == 'aleator':
         return select_random_path(E)
+    elif method == 'greedy':
+        return select_greedy_path(E)
     elif method == 'programareDinamica':
         return select_dynamic_programming_path(E)
     else:

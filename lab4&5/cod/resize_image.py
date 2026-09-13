@@ -83,28 +83,58 @@ def delete_path(img, path):
         
     return updated_img
 
-def decrease_width(params: Parameters, num_pixels):
-    img = params.image.copy() # copiaza imaginea originala
-
+def _decrease_width_img(img, num_pixels, params, masca_obiect=None):
+    """sterge num_pixels drumuri verticale dintr-o imagine data
+ 
+    lucreaza pe un array, nu pe params, ca sa o putem refolosi la
+    amplificarea continutului si la stergerea de obiecte.
+ 
+    masca_obiect: daca este dat, pixelii marcati cu 1 primesc energie foarte
+    mica, ca drumurile sa treaca obligatoriu prin ei (folosit la delete_object).
+    Masca este taiata odata cu imaginea, ca sa ramana aliniata.
+    """
     for i in range(num_pixels):
-        print('Eliminam drumul vertical numarul %i dintr-un total de %d.' % (i+1, num_pixels))
-
-        # calculeaza energia dupa ecuatia (1) din articol
+        print('Eliminam drumul vertical numarul %i dintr-un total de %d.'
+              % (i + 1, num_pixels))
+ 
         E = compute_energy(img)
-
+ 
+        if masca_obiect is not None:
+            # energie puternic negativa => drumul minim este atras in obiect
+            E[masca_obiect > 0] = -10 ** 6
+ 
         path = select_path(E, params.method_select_path)
-
+ 
         if params.show_path:
             show_path(img, path, params.color_path)
-
+ 
         img = delete_path(img, path)
+ 
+        if masca_obiect is not None:
+            # stergem acelasi drum si din masca, ca sa ramana aliniata cu imaginea
+            h, w = masca_obiect.shape
+            m = np.ones((h, w), dtype=bool)
+            m[[p[0] for p in path], [p[1] for p in path]] = False
+            masca_obiect = masca_obiect[m].reshape(h, w - 1)
+ 
+    return img, masca_obiect
 
+def decrease_width(params: Parameters, num_pixels):
+    img = params.image.copy()  # copiaza imaginea originala
+    img, _ = _decrease_width_img(img, num_pixels, params)
     cv.destroyAllWindows()
     return img
 
 def decrease_height(params: Parameters, num_pixels):
-	#TODO: scrieti codul
-    return None
+    img = params.image.copy()
+    img_transpus = np.transpose(img, (1, 0, 2)).copy()
+ 
+    img_transpus, _ = _decrease_width_img(img_transpus, num_pixels, params)
+ 
+    img = np.transpose(img_transpus, (1, 0, 2)).copy()
+    cv.destroyAllWindows()
+    return img
+
 
 def delete_object(params: Parameters, x0, y0, w, h):
     #TODO: scrieti codul
@@ -118,8 +148,8 @@ def resize_image(params: Parameters):
         return resized_image
 
     elif params.resize_option == 'micsoreazaInaltime':
-        #TODO: scrieti codul    
-        return None
+        resized_image = decrease_height(params, params.num_pixel_height)
+        return resized_image
     
     elif params.resize_option == 'amplificaContinut':
         #TODO: scrieti codul
