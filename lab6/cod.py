@@ -1,14 +1,30 @@
-import cv2 as cv
-import numpy as np
 import os
+import numpy as np
+import cv2 as cv
+
+
+AFISEAZA = True
+DIM_CAREU = 810   # 9 celule ori 90 pixeli
+DIM_CELULA = DIM_CAREU // 9 
 
 def show_image(title,image):
+    if not AFISEAZA:
+        return
     image=cv.resize(image,(0,0),fx=0.3,fy=0.3)
     cv.imshow(title,image)
     cv.waitKey(0)
     cv.destroyAllWindows()
 
+
+# PASUL 1a - extragerea careului
 def extrage_careu(image):
+
+    """
+        gasesc careul sudoku in imagine si il indrept intr un patrat de 810 pe 810 pixeli prin transformare de perspectiva 
+        intorc imaginea color indreptata ca sa pot desena linii colorate peste ea si ca sa pot decupa celulele originale pt cifre
+    """
+
+    original = image.copy()
 
     image = cv.cvtColor(image,cv.COLOR_BGR2GRAY)
     image_m_blur = cv.medianBlur(image,3)
@@ -16,16 +32,51 @@ def extrage_careu(image):
     image_sharpened = cv.addWeighted(image_m_blur, 1.2, image_g_blur, -0.8, 0)
 
     show_image('image_sharpened',image_sharpened)
-    _, thresh = cv.threshold(image_sharpened, 30, 255, cv.THRESH_BINARY)
+
+    # PAS 1!!!
+    # separ hartia (luminoasa) de fundal (inchis) prin thresholding 
+    _, hartie = cv.threshold(image_sharpened, 30, 255, cv.THRESH_BINARY)
 
     kernel = np.ones((3, 3), np.uint8)
-    thresh = cv.erode(thresh, kernel)
-    show_image('image_thresholded',thresh)
+    hartie = cv.erode(hartie, kernel)
+    show_image('image_thresholded', hartie)
 
-    edges =  cv.Canny(thresh ,200,400)
-    show_image('edges',edges)
-    contours, _ = cv.findContours(edges,  cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE)
+    # PAS 2!!!
+    # masca de mai sus are gauri exact acolo unde sunt liniile careului
+    # ele sunt inchise la culoare, deci cad sub prag
+    # umplu masca pastrand doar conturul exterior al foii
+    contururi_hartie, _ = cv.findContours(hartie, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE)
+    if len(contururi_hartie) == 0:
+        raise ValueError('nu am gasit foaia in imagine')
+    contur_foaie = max(contururi_hartie, key = cv.contourArea)
+
+    hartie_plina = np.zeros_like(hartie)
+    cv.drawContours(hartie_plina, [contur_foaie], -1, 255, -1)
+
+    # PAS 3!!!
+    # restang masca spre interior, ca sa scap de marginea foii
+    # altfel conturul cel mai mare ar fi foaia intreaga, nu careul
+    raza = max(3, int(0.01 * max(image.shape)))
+    hartie_interior = cv.erode(hartie_plina, np.ones((raza, raza), np.uint8))
+    show_image('hartie_interior', hartie_interior)
+
+    # PAS 4!!!
+    # in interiorul foii, cerneala (adica liniile careului si cifrele) este inchisa
+    # prag adaptiv, ca sa nu ma incurce iluminarea neuniforma din poza
+    cerneala = cv.adaptiveThreshold(image_sharpened, 255, cv.ADAPTIVE_THRESH_GAUSSIAN_C, cv.THRESH_BINARY_INV, 31, 10)
+
+    cerneala = cv.bitwise_and(cerneala, hartie_interior)
+
+    # ingros putin liniile ca sa fie sigur conectate intre ele
+    cerneala = cv.dilate(cerneala, np.ones((3, 3), np.uint8))
+    show_image('cerneala', cerneala)
+
+    # PAS 5!!!
+    # cel mai mare contur exterior este chenarul careului
+    # liniile lui formeaza o singura componenta conexa
+    contours, _ = cv.findContours(cerneala, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE)
     max_area = 0
+    top_left = top_right = bottom_left = bottom_right = None
    
     for i in range(len(contours)):
 
@@ -34,102 +85,46 @@ def extrage_careu(image):
             possible_bottom_right = None
 
             for point in contours[i].squeeze():
+                # suma x+y este minima in contul stanga-sus si maxima in dreapta-jos
                 if possible_top_left is None or point[0] + point[1] < possible_top_left[0] + possible_top_left[1]:
                     possible_top_left = point
 
                 if possible_bottom_right is None or point[0] + point[1] > possible_bottom_right[0] + possible_bottom_right[1] :
                     possible_bottom_right = point
 
+            # diferenta y-x este minima in dreapta sus si maxima in stanga jos
             diff = np.diff(contours[i].squeeze(), axis = 1)
 
             possible_top_right = contours[i].squeeze()[np.argmin(diff)]
             possible_bottom_left = contours[i].squeeze()[np.argmax(diff)]
 
-            if cv.contourArea(np.array([[possible_top_left],[possible_top_right],[possible_bottom_right],[possible_bottom_left]])) > max_area:
+            arie = cv.contourArea(np.array([[possible_top_left],[possible_top_right],[possible_bottom_right],[possible_bottom_left]]))
 
-                max_area = cv.contourArea(np.array([[possible_top_left],[possible_top_right],[possible_bottom_right],[possible_bottom_left]]))
+            if arie > max_area:
+                max_area = arie
                 top_left = possible_top_left
                 bottom_right = possible_bottom_right
                 top_right = possible_top_right
                 bottom_left = possible_bottom_left
 
-    width = 810
-    height = 810
-    
-    image_copy = cv.cvtColor(image.copy(),cv.COLOR_GRAY2BGR)
-    cv.circle(image_copy,tuple(top_left),20,(0,0,255),-1)
-    cv.circle(image_copy,tuple(top_right),20,(0,0,255),-1)
-    cv.circle(image_copy,tuple(bottom_left),20,(0,0,255),-1)
-    cv.circle(image_copy,tuple(bottom_right),20,(0,0,255),-1)
-    show_image("detected corners",image_copy)
+    if top_left is None:
+        raise ValueError('nu am gasit niciun contur potrivit pentru careu')
 
-    #completati codul aici
-    # cod lala 
+    if AFISEAZA:
+        image_copy = cv.cvtColor(image.copy(), cv.COLOR_GRAY2BGR)
+        for colt in [top_left, top_right, bottom_left, bottom_right]:
+            cv.circle(image_copy, tuple(colt), 20, (0, 0, 255), -1)
+        show_image('detected corners', image_copy)
+
+    # PAS 6!!!
+    # transformarea de perspectiva: cele 4 colturi gasite defin cele 4 colturi ale unui patrat de 810 pe 810
+    width = DIM_CAREU
+    height = DIM_CAREU
+
+    puzzle = np.array([top_left, top_right, bottom_right, bottom_left], dtype='float32')
+    destination = np.array([[0, 0], [width - 1, 0], [width - 1, height - 1], [0, height - 1]], dtype='float32')
+
+    M = cv.getPerspectiveTransform(puzzle, destination)
+    result = cv.warpPerspective(original, M, (width, height))
     
     return result
-
-
-def determina_configuratie_careu_ox(thresh,lines_horizontal,lines_vertical):
-
-    matrix = np.empty((9,9), dtype='str')
-
-    for i in range(len(lines_horizontal)-1):
-        for j in range(len(lines_vertical)-1):
-
-            y_min = lines_vertical[j][0][0] 
-            y_max = lines_vertical[j + 1][1][0]
-            x_min = lines_horizontal[i][0][1] 
-            x_max = lines_horizontal[i + 1][1][1] 
-            
-            patch = thresh[x_min:x_max, y_min:y_max].copy()
-            #completati codul aici
-            
-    return matrix
-
-def vizualizare_configuratie(result,matrix,lines_horizontal,lines_vertical):
-
-    for i in range(len(lines_horizontal) - 1):
-        for j in range(len(lines_vertical) - 1):
-
-            y_min = lines_vertical[j][0][0]
-            y_max = lines_vertical[j + 1][1][0]
-            x_min = lines_horizontal[i][0][1]
-            x_max = lines_horizontal[i + 1][1][1]
-            
-            if matrix[i][j] == 'x': 
-                cv.rectangle(result, (y_min, x_min), (y_max, x_max), color=(255, 0, 0), thickness=5)
-
-
-def clasifica_cifra(patch):
-        
-    maxi=-np.inf
-    poz=-1
-
-    for j in range(1,10):
-        img_template=cv.imread('templates/'+str(j)+'.jpg')
-        img_template= cv.cvtColor(img_template,cv.COLOR_BGR2GRAY)
-        corr = cv.matchTemplate(patch,img_template,  cv.TM_CCOEFF_NORMED)
-        corr=np.max(corr)
-        #completati codul aici
-        
-    return poz
-
-
-def determina_configuratie_careu_ocifre(img,thresh,lines_horizontal,lines_vertical):
-
-    matrix = np.empty((9,9), dtype='str')
-
-    for i in range(len(lines_horizontal)-1):
-        for j in range(len(lines_vertical)-1):
-
-            y_min = lines_vertical[j][0][0] 
-            y_max = lines_vertical[j + 1][1][0] 
-            x_min = lines_horizontal[i][0][1]
-            x_max = lines_horizontal[i + 1][1][1] 
-
-            patch = thresh[x_min:x_max, y_min:y_max].copy()
-            patch_orig=img[x_min:x_max, y_min:y_max].copy()
-            patch_orig= cv.cvtColor(patch_orig,cv.COLOR_BGR2GRAY)
-            
-            #completati codul aici
-    return matrix
