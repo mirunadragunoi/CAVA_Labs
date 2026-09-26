@@ -352,3 +352,48 @@ def determina_configuratie_careu_ocifre(img, thresh, lines_horizontal, lines_ver
             matrix[i][j] = 'o' if cifra == -1 else str(cifra)
             
     return matrix
+
+
+# =====================================================================
+# rularea pe un folder intreg
+# =====================================================================
+def matrice_ca_text(matrix):
+    return '\n'.join(''.join(matrix[i]) for i in range(9))
+ 
+ 
+def proceseaza_imagine(cale_imagine, director_templates='templates', cu_cifre=True):
+    img = cv.imread(cale_imagine)
+    if img is None:
+        raise FileNotFoundError(cale_imagine)
+ 
+    result = extrage_careu(img)
+    thresh = binarizeaza_careu(result)
+    lh, lv = construieste_linii()
+ 
+    matrice_ox = determina_configuratie_careu_ox(thresh, lh, lv)
+    matrice_cifre = None
+    if cu_cifre:
+        matrice_cifre = determina_configuratie_careu_ocifre(result, thresh, lh, lv,
+                                                            director_templates=director_templates)
+ 
+    return result, thresh, matrice_ox, matrice_cifre
+ 
+ 
+def proceseaza_folder(director_intrare, director_iesire, director_templates='templates',
+                      cu_cifre=True):
+    os.makedirs(director_iesire, exist_ok=True)
+    fisiere = sorted(f for f in os.listdir(director_intrare)
+                     if f.lower().endswith(('.jpg', '.jpeg', '.png')))
+ 
+    for nume in fisiere:
+        scurt = os.path.splitext(nume)[0]
+        _, _, m_ox, m_cifre = proceseaza_imagine(
+            os.path.join(director_intrare, nume), director_templates, cu_cifre)
+ 
+        with open(os.path.join(director_iesire, scurt + '_predicted.txt'), 'w') as f:
+            f.write(matrice_ca_text(m_ox))
+        if m_cifre is not None:
+            with open(os.path.join(director_iesire, scurt + '_bonus_predicted.txt'), 'w') as f:
+                f.write(matrice_ca_text(m_cifre))
+ 
+        print('%s gata' % nume)
