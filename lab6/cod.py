@@ -128,3 +128,46 @@ def extrage_careu(image):
     result = cv.warpPerspective(original, M, (width, height))
     
     return result
+
+# liniile sunt multipli de 90
+# lines_vertical dau coordonata pe orizontala (coloana)
+# lines_horizontal sau coordonata pe verticala (linia)
+# decuparea unei celule: imagine[linii, coloane]
+
+def construieste_linii():
+    lines_horizontal = []
+
+    for i in range(0, DIM_CAREU + 1, DIM_CELULA):
+        lines_horizontal.append([(0, i), (DIM_CAREU - 1, i)])
+
+    lines_vertical = []
+
+    for i in range(0, DIM_CAREU + 1, DIM_CELULA):
+        lines_vertical.append([(i, 0), (i, DIM_CAREU - 1)])
+
+    return lines_horizontal, lines_vertical
+
+
+def binarizeaza_careu(result):
+    # din careul indreptat obtin o imagine binara in care cerneala este alba
+    # pe aceasta imagine masor cat de plina este fiecare celula
+
+    gray = cv.cvtColor(result, cv.COLOR_BGR2GRAY)
+    gray = cv.GaussianBlur(gray, (5, 5), 0)
+
+    thresh = cv.adaptiveThreshold(gray, 255, cv.ADAPTIVE_THRESH_GAUSSIAN_C, cv.THRESH_BINARY_INV, 31, 10)
+
+    return thresh
+
+
+def decupeaza_celula(imagine, lines_horizontal, lines_vertical, i, j, margine=12):
+    # decupez celula (i, j) fara chenar
+    
+    y_min = lines_vertical[j][0][0]
+    y_max = lines_vertical[j + 1][1][0]
+    x_min = lines_horizontal[i][0][1]
+    x_max = lines_horizontal[i + 1][1][1]
+
+    patch = imagine[x_min + margine:x_max - margine, y_min + margine:y_max - margine].copy()
+
+    return patch
