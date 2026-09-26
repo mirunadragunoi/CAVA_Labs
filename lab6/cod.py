@@ -171,3 +171,61 @@ def decupeaza_celula(imagine, lines_horizontal, lines_vertical, i, j, margine=12
     patch = imagine[x_min + margine:x_max - margine, y_min + margine:y_max - margine].copy()
 
     return patch
+
+
+# PASUL 1B!!!!!!!!
+# PASUL 3!!!! configuratia 0 si X
+# pt fiecare celula calculez media intensitatii pe imaginea binarizata, unde cerneala e alba
+# o celula goala are media aproape 0, celula cu cifra are media mult mai mare
+# pt a fixa pragul: sortez cele 81 de medii si caut cel mai mare salt intre 2 val consecutive
+
+def medii_celule(thresh, lines_horizontal, lines_vertical):
+    # media intensitatii pentru fiecare dintre cele 81 de celule, o folosesc ca sa aleg pragul
+    medii = np.zeros((9, 9))
+
+    for i in range(9):
+        for j in range(9):
+            patch = decupeaza_celula(thresh, lines_horizontal, lines_vertical, i, j)
+            medii[i, j] = np.mean(patch)
+
+    return medii 
+
+def alege_prag(medii):
+    # pragul il aleg automat din datele imaginii
+
+    valori = np.sort(medii.flatten())
+    salturi = np.diff(valori)
+    k = int(np.argmax(salturi))
+
+    return (valori[k] + valori[k + 1]) / 2
+
+def determina_configuratie_careu_ox(thresh, lines_horizontal, lines_vertical, prag = None):
+
+    matrix = np.empty((9,9), dtype='str')
+
+    medii = medii_celule(thresh, lines_horizontal, lines_vertical)
+
+    if prag is None:
+        prag = alege_prag(medii)
+
+    for i in range(len(lines_horizontal) - 1):
+        for j in range(len(lines_vertical) - 1):
+            # celula are mai multa cerneala --->>> inseamna ca contine o cifra
+            matrix[i][j] = 'x' if medii[i, j] > prag else 'o'
+            
+    return matrix
+
+def vizualizare_configuratie(result, matrix, lines_horizontal, lines_vertical):
+
+    for i in range(len(lines_horizontal) - 1):
+        for j in range(len(lines_vertical) - 1):
+
+            y_min = lines_vertical[j][0][0]
+            y_max = lines_vertical[j + 1][1][0]
+            x_min = lines_horizontal[i][0][1]
+            x_max = lines_horizontal[i + 1][1][1]
+            
+            if matrix[i][j] == 'x': 
+                cv.rectangle(result, (y_min, x_min), (y_max, x_max), color=(255, 0, 0), thickness=5)
+
+    return result
