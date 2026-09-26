@@ -229,3 +229,126 @@ def vizualizare_configuratie(result, matrix, lines_horizontal, lines_vertical):
                 cv.rectangle(result, (y_min, x_min), (y_max, x_max), color=(255, 0, 0), thickness=5)
 
     return result
+
+# PASUL 4!!! SABLOANE PT CIFRE
+
+DIM_TEMPLATE = 60   # toate cifrele si sabloanele ajung la 60 pe 60
+_cache_templates = {}   # sabloanele citite o singura data
+
+def normalizeaza_cifra(patch_bin, dim=DIM_TEMPLATE):
+    # decupez cifra de bounding box ul ei si o aduc la o dimensiune fixa
+    # fara pasul asta template matching ul compara o cifra din coltul celulei cu un sablon centrat si da scoruri mici pt toate cifrele
+
+    contours, _ = cv.findContours(patch_bin, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE)
+
+    if len(contours) == 0:
+        return None
+
+    c = max(contours, key = cv.contourArea)
+    if cv.contourArea(c) < 20:
+        return None 
+
+    x, y, w, h = cv.boundingRect(c)
+    cifra = patch_bin[y:y + h, x:x + w]
+
+    # o pun intr un patrat ca sa nu se deformeze raportul
+    latura = max(w, h)
+    patrat = np.zeros((latura, latura), np.uint8)
+    off_y = (latura - h) // 2
+    off_x = (latura - w) // 2
+    patrat[off_y:off_y + h, off_x:off_x + w] = cifra 
+
+    return cv.resize(patrat, (dim, dim), interpolation=cv.INTER_AREA)
+
+def creeaza_templates_din_imagine(cale_imagine, adnotare, director='templates'):
+    # construiesc sabloanele decupand cate o aparitie a fiecarei cifre dintr o imagine de antrenare
+
+    os.makedirs(director, exist_ok=True)
+
+    img = cv.imread(cale_imagine)
+    result = extrage_careu(img)
+    thresh = binarizeaza_careu(result)
+    lh, lv = construieste_linii()
+
+    gasite = {}
+    for i in range(9):
+        for j in range(9):
+            c = adnotare[i][j]
+
+            if c == 'o' or c in gasite:
+                continue
+
+            patch = decupeaza_celula(thresh, lh, lv, i, j)
+
+            cifra = normalizeaza_cifra(patch)
+
+            if cifra is not None:
+                gasite[c] = cifra
+                cv.imwrite(os.path.join(director, c + '.jpg'), cifra)
+
+    _cache_templates.pop(director, None)
+    return sorted(gasite.keys())
+
+def incarca_templates(director='templates'):
+    # citesc sabloanele o singura data si le tin in memorie
+    if director in _cache_templates:
+        return _cache_templates[director]
+
+    templates = {}
+
+    for j in range(1, 10):
+        cale = os.path.join(director, str(j) + '.jpg')
+
+        img_template = cv.imread(cale)
+
+        if img_template is None:
+            raise FileNotFoundError('lipseste sablonul %s' % cale)
+
+        img_template = cv.cvtColor(img_template, cv.COLOR_BGR2GRAY)
+        _, img_template = cv.threshold(img_template, 127, 255, cv.THRESH_BINARY)
+        templates[j] = cv.resize(img_template, (DIM_TEMPLATE, DIM_TEMPLATE))
+
+    _cache_templates[director] = templates
+    return templates
+
+def clasifica_cifra(patch, director_templates = 'templates'):
+    # compar celula normalizata cu fiecare sablon si aleg cifra cu corelatia cea mai mare
+
+    templates = incarca_templates(director_templates)
+
+    cifra = normalizeaza_cifra(patch)
+    if cifra is None:
+        return -1
+
+    maxi = -np.inf
+    poz = -1
+
+    for j in range(1,10):
+        corr = cv.matchTemplate(cifra, templates[j], cv.TM_CCOEFF_NORMED)
+        corr = np.max(corr)
+        if corr > maxi:
+            maxi = corr
+            poz = j
+        
+    return poz
+
+def determina_configuratie_careu_ocifre(img, thresh, lines_horizontal, lines_vertical, prag = None, director_templates = 'templates'):
+
+    matrix = np.empty((9,9), dtype='str')
+
+    medii = medii_celule(thresh, lines_horizontal, lines_vertical)
+    if prag is None:
+        prag = alege_prag(medii)
+
+    for i in range(len(lines_horizontal) - 1):
+        for j in range(len(lines_vertical) - 1):
+
+            if medii[i, j] <= prag:
+                matrix[i][j] = 'o'
+                continue 
+
+            patch = decupeaza_celula(thresh, lines_horizontal, lines_vertical, i, j)
+            cifra = clasifica_cifra(patch, director_templates)
+            matrix[i][j] = 'o' if cifra == -1 else str(cifra)
+            
+    return matrix
