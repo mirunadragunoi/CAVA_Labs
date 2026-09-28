@@ -15,6 +15,9 @@ env/
 mozaic.png
 **/rezultate/
 
+# Tema1 - dataset imagini (prea mari pentru git, ~1.25 GB)
+tema1/**/*.jpg
+
 # Setari IDE / editor
 .vscode/
 .idea/
