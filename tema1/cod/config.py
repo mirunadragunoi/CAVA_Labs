@@ -2,8 +2,8 @@
 
 import os 
 
-# radacina arhivei cu date 
-DIR_DATE = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'tema1')
+# radacina arhivei cu date (folderul tema1, adica parintele lui cod/)
+DIR_DATE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 DIR_ANTRENARE = os.path.join(DIR_DATE, 'antrenare')
 DIR_TESTARE = os.path.join(DIR_DATE, 'testare')
