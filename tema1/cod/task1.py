@@ -45,12 +45,19 @@ def gaseste_piesa_noua(tabla_acum, tabla_inainte, ocupate = None):
     return int(i), int(j), scoruri 
 
 
-def incredere(scoruri, i, j):
-    # raportul dintre scorul castigator si urmatorul
-    # cu cat e mai mare, cu atat mai sigur 
+def incredere(scoruri, ocupate=None):
+    # raportul dintre scorul celulei alese si al urmatoarei celule disponibile
+    # cu cat e mai mare, cu atat mai sigur
     # il folosesc doar ca sa semnalez mutarile dubioase
+    # exclud celulele ocupate, exact ca in gaseste_piesa_noua, altfel as compara
+    # cu o celula care nici macar nu putea fi aleasa
 
-    v = np.sort(scoruri.ravel())[::-1]
+    s = scoruri.copy()
+    if ocupate:
+        for (i, j) in ocupate:
+            s[i, j] = -1
+
+    v = np.sort(s.ravel())[::-1]
     return float(v[0] / max(v[1], 1e-6))
 
 # RULAREA PE UN JOC INTREG
@@ -95,13 +102,15 @@ def proceseaza_joc(director, joc, director_iesire = None, verbose = True):
         i, j, scoruri = gaseste_piesa_noua(tabla_acum, tabla_inainte, ocupate)
         pozitie = index_la_pozitie(i, j)
 
+        if verbose:
+            # calculez marja inainte sa adaug (i, j) in ocupate, ca sa nu-mi
+            # exclud chiar celula pe care tocmai am ales-o
+            inc = incredere(scoruri, ocupate)
+            semn = '' if inc > 1.8 else '   <-- incredere mica (%.2f)' % inc
+            print('   %s -> %-4s%s' % (nume, pozitie, semn))
+
         ocupate.add((i, j))
         rezultate.append((nume, pozitie, i, j))
-
-        if verbose:
-            inc = incredere(scoruri, i, j)
-            semn = '' if inc > 1.8 else '   <-- incredere mica (%.2f)' % inc 
-            print('   %s -> %-4s%s' % (nume, pozitie, semn))
 
         # tabla curenta devine referinta pentru mutarea urmatoare
         tabla_inainte = tabla_acum
